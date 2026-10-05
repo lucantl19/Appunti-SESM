@@ -1,0 +1,182 @@
+\chapter{Fondamenti della programmazione in C}
+I linguaggi di programmazione si distinguono in base alla modalità di traduzione ed esecuzione del codice da parte dell'hardware:
+\begin{itemize}
+    \item \textbf{Linguaggi compilati} $\rightarrow$ la traduzione del codice sorgente genera direttamente codice macchina (codice nativo), costituito da istruzioni binarie eseguibili direttamente dalle reti combinatorie del processore (es. C, C++, Rust). L'eseguibile binario viene processato dalla CPU in modo autonomo, senza richiedere la presenza del sorgente. La compilazione è un'operazione preventiva e computazionalmente onerosa, che impone la ricompilazione dell'intero progetto a ogni modifica del sorgente; l'eseguibile risulta hardware-specific e caratterizzato da bassa portabilità, ma assicura massima efficienza computazionale ed esecuzione deterministica idonea per applicazioni real-time.
+    \item \textbf{Linguaggi interpretati} $\rightarrow$ il codice sorgente viene tradotto ed eseguito a run-time mediante un interprete o un ambiente di esecuzione dedicato (es. C\#, Visual Basic, Java, Python, MATLAB, LabVIEW). Possono generare un codice intermedio (bytecode) eseguito da una macchina virtuale (come .NET Framework, Java Virtual Machine o Dalvik Machine) oppure essere interpretati istruzione per istruzione. Garantiscono elevata portabilità e consentono modifiche a run-time senza ricompilazione, ma presentano prestazioni inferiori e totale assenza di determinismo temporale, precludendone l'impiego in contesti real-time.
+    \item \textbf{Linguaggi di scripting} $\rightarrow$ interpretano direttamente il testo sorgente inviato all'hardware senza generazione di bytecode intermedio (es. PHP, JavaScript, Bash, Dash). L'interprete si basa su un analizzatore lessicale (lexer), comportando una velocità di esecuzione ulteriormente ridotta a fronte della massima portabilità del codice.
+    \item \textbf{Linguaggio Assembly} $\rightarrow$ fornisce una rappresentazione mnemonica con corrispondenza uno-a-uno rispetto al linguaggio macchina; non richiede processi complessi di astrazione né la presenza di un interprete.
+\end{itemize}
+Un caso peculiare tra i linguaggi interpretati è rappresentato dall'ambiente LabVIEW, il quale presenta una doppia interpretazione: il suo interprete è sviluppato in C\# (a sua volta linguaggio interpretato con runtime engine) e fa uso di DLL (\textit{Dynamic Link Library}, note come \textit{shared objects} in altri sistemi operativi), ovvero moduli di codice nativo precompilato collegati dinamicamente all'applicazione in fase di esecuzione, in contrasto con il linking statico eseguito al momento della compilazione.
+
+\section{Architettura della Toolchain}
+La toolchain rappresenta la suite integrata di strumenti software deputata alla trasformazione del codice sorgente in firmware eseguibile. La configurazione della toolchain è strettamente hardware-specific: ogni variazione del processore di destinazione richiede un compilatore, un assembler e un linker dedicati per la specifica architettura. L'intero flusso è tipicamente coordinato da un programma supervisore (\textit{make} o compiler driver).
+
+Il processo si articola in fasi sequenziali ben definite:
+\begin{enumerate}
+    \item \textbf{Preprocessing e Compilazione C} $\rightarrow$ il preprocessore espande le macro definite tramite la direttiva \texttt{\#define} e include il contenuto dei file di intestazione specificati con \texttt{\#include}. Il compilatore esegue l'analisi lessicale e sintattica del codice sorgente (\texttt{.c}) e genera i corrispondenti file sorgente in linguaggio assembly (\texttt{.asm}).
+    \item \textbf{Assemblaggio} $\rightarrow$ l'assembler elabora i file assembly (\texttt{.asm}, \texttt{.s}) e gli eventuali file ausiliari di inclusione (\texttt{.inc}), traducendoli in file oggetto (\texttt{.o}). I file oggetto contengono codice macchina non ancora consolidato, caratterizzato da riferimenti simbolici non risolti. Per ogni file sorgente C corrisponde un singolo file oggetto; in questa fase possono operare più compilatori e assembler in parallelo.
+    \item \textbf{Archiviazione delle librerie} $\rightarrow$ tramite il programma archiver (\textit{librarian}), i file oggetto possono essere raggruppati in librerie di archivi statici (\texttt{.a}) o dinamici (\texttt{.lib}).
+    \item \textbf{Linking} $\rightarrow$ un unico linker riceve la totalità dei file oggetto (\texttt{.o}), le librerie di sistema o utente (\texttt{.lib}, \texttt{.a}) e le direttive del Linker Script (\texttt{.lkr} o \texttt{.gld}). Il linker unifica i moduli, associa gli indirizzi fisici effettivi a tutti i simboli (funzioni e variabili globali/esterne) e colloca le sezioni di memoria secondo la mappa dell'architettura.
+\end{enumerate}
+
+I prodotti generati al termine del linking comprendono:
+\begin{itemize}
+    \item \textbf{File Eseguibile (\texttt{.hex})} $\rightarrow$ immagine binaria destinata alla scrittura fisica all'interno della memoria del microcontrollore.
+    \item \textbf{Memory Map (\texttt{.map})} $\rightarrow$ documento descrittivo recante la ripartizione dettagliata e la collocazione degli indirizzi di memoria assegnati alle sezioni e ai simboli.
+    \item \textbf{File di Debug (\texttt{.elf})} $\rightarrow$ formato che include il codice eseguibile integrato con la tabella dei simboli e le informazioni di debug, destinato agli strumenti di ispezione.
+\end{itemize}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.7\linewidth]{immagini/programmazione1}
+\end{figure}
+Il debugger (\textit{in-circuit debugging}) si avvale di una combinazione di elementi hardware e software interfacciati al microcontrollore tramite sonde dedicate (come il modulo hardware ST-Link/V2).
+
+L'analisi degli errori generati durante il flusso consente di isolare la fase di generazione responsabile:
+\begin{itemize}
+    \item \textbf{Syntax error} $\rightarrow$ errore rilevato dal compilatore dovuto a violazioni della sintassi formale nel codice sorgente C.
+    \item \textbf{Unresolved symbol} $\rightarrow$ errore segnalato dal linker causato dall'impossibilità di risolvere l'indirizzo di una funzione o di un identificatore (a causa di nomi errati, funzioni non implementate, moduli omessi in compilazione o librerie mancanti).
+\end{itemize}
+
+\section{Runtime Startup Code e Avvio del Sistema}
+Il software caricato all'interno della memoria di un microcontrollore non si esaurisce nel codice applicativo scritto dall'utente o generato da configuratori grafici (quali STM32CubeMX), ma include obbligatoriamente il codice di runtime C e il runtime startup code.
+
+Il C Runtime (\textit{CRT}) è un insieme di routine a basso livello e funzioni di supporto necessarie per il corretto funzionamento del linguaggio C su piattaforma embedded; viene collegato automaticamente in fase di linking e si presenta tipicamente sotto forma di sorgente assembly (\texttt{crt0.s}, oppure file nominati \texttt{startup\_....s} in ambiente ST) o codice oggetto precompilato (\texttt{crt0.o}). 
+
+Il runtime startup code viene eseguito dal processore immediatamente all'uscita dal reset, prima dell'ingresso nella funzione \texttt{main()}; esso è interamente modificabile dallo sviluppatore qualora siano richieste riconfigurazioni dell'ambiente di esecuzione.
+
+Le operazioni sequenziali eseguite dal runtime startup code sono:
+\begin{enumerate}
+    \item Definizione e inizializzazione della tabella dei vettori di interruzione (Interrupt Vector Table, IVT).
+    \item Configurazione degli handler per la gestione delle eccezioni hardware e software (condizioni anomale quali divisioni per zero o tentativi di accesso non valido in memoria).
+    \item Gestione del vettore di reset: all'indirizzo fisico $0$ della memoria risiede il puntatore all'istruzione di reset, la quale provvede ad azzerare il registro Program Counter (PC), indirizzandolo alla prima istruzione eseguibile.
+    \item Inizializzazione fisica di tutte le sezioni di memoria dati (copia dei valori iniziali delle variabili dalla memoria non volatile alla RAM e azzeramento dell'area BSS).
+    \item Caricamento e inizializzazione del registro Stack Pointer e delimitazione dello spazio riservato all'Heap.
+    \item Salto incondizionato alla prima istruzione della funzione \texttt{main()}.
+\end{enumerate}
+
+Lo Stack è una struttura dati operante secondo logica LIFO (\textit{Last In, First Out}, in cui l'ultimo elemento inserito è il primo a essere estratto) impiegata dal calcolatore per:
+\begin{itemize}
+    \item Memorizzare le sequenze di chiamate a funzione (\textit{call stack}).
+    \item Allocare temporaneamente le variabili locali.
+    \item Salvare gli indirizzi di ritorno al termine dell'esecuzione delle subroutine.
+    \item Preservare lo stato dei registri della CPU durante cambi di contesto o salti a funzione.
+\end{itemize}
+
+Il registro Stack Pointer punta permanentemente all'elemento collocato alla sommità dello stack. Tale meccanismo garantisce il riutilizzo rapido ed efficiente dello spazio occupato dalle variabili non appena queste terminano il loro ambito di visibilità; al contrario, variabili allocate esternamente allo stack risiedono in aree statiche con minore flessibilità gestionale.
+
+\newpage
+\section{Struttura del Programma e sintassi fondamentale}
+Un programma in C destinato a sistemi embedded presenta una struttura modulare governata da direttive e blocchi funzionali:
+
+\begin{itemize}
+    \item \textbf{\texttt{\#include <stdio.h>}} $\rightarrow$ direttiva per il preprocessore deputata a includere integralmente nel sorgente il contenuto del file header standard, rendendo disponibili i prototipi delle funzioni di I/O.
+    \item \textbf{\texttt{\#define PI 3.14159}} $\rightarrow$ direttiva per la sostituzione testuale; ogni occorrenza dell'etichetta nel codice sottostante viene sostituita letteralmente con il valore definito prima della compilazione.
+    \item \textbf{\texttt{int main(void)}} $\rightarrow$ funzione principale obbligatoria; ogni applicativo C deve presentare una e una sola funzione \texttt{main()}, punto di avvio del codice utente al completamento del setup del CRT.
+\end{itemize}
+
+Nelle applicazioni embedded su architetture ARM, le funzioni di libreria standard per la stampa a video (come \texttt{printf()}) possono operare mediante la modalità di \textbf{semihosting}. Il semihosting è un meccanismo hardware/software che permette al firmware in esecuzione sul microcontrollore di impiegare i canali di input/output della macchina host che ospita il debugger; per realizzare la console/terminale viene impiegata direttamente una delle linee di debug hardware, evitando l'allocazione e l'occupazione di una linea seriale fisica del microcontrollore.
+
+Il linguaggio C supporta due tipologie di \textbf{commenti}:
+\begin{itemize}
+    \item Commenti a blocco: delimitati all'apertura da \texttt{/*} e in chiusura da \texttt{*/}, possono estendersi su più righe di testo.
+    \item Commenti a singola linea: introdotti dalla sequenza \texttt{//}, estendono il commento fino al termine della riga corrente.
+\end{itemize}
+
+Gli \textbf{identificatori} definiscono i nomi univoci attribuiti a elementi quali variabili, funzioni o array per referenziarli prescindendo dall'effettiva locazione di memoria. Le regole sintattiche stabiliscono che:
+\begin{itemize}
+    \item Gli identificatori devono essere costituiti da sequenze di caratteri.
+    \item Il primo carattere non deve essere un numero.
+    \item È fatto divieto assoluto di includere caratteri di spaziatura.
+    \item La sintassi è rigorosamente case sensitive (es. \texttt{myVar} e \texttt{MyVar} identificano due entità differenti).
+\end{itemize}
+
+Lo standard ANSI C definisce un insieme di parole chiave riservate (\textit{keywords}) che possiedono un significato sintattico specifico per il compilatore e non possono in alcun caso essere impiegate come identificatori:
+\texttt{auto}, \texttt{break}, \texttt{case}, \texttt{char}, \texttt{const}, \texttt{continue}, \texttt{default}, \texttt{do}, \texttt{double}, \texttt{else}, \texttt{enum}, \texttt{extern}, \texttt{float}, \texttt{for}, \texttt{goto}, \texttt{if}, \texttt{int}, \texttt{long}, \texttt{register}, \texttt{return}, \texttt{short}, \texttt{signed}, \texttt{sizeof}, \texttt{static}, \texttt{struct}, \texttt{switch}, \texttt{typedef}, \texttt{union}, \texttt{unsigned}, \texttt{void}, \texttt{volatile}, \texttt{while}.
+
+\subsection{Tipizzazione dei dati e dichiarazione delle variabili}
+Una \textbf{variabile} costituisce l'associazione tra un tipo di dato e un identificatore, atta a rappresentare una o più locazioni di memoria destinate a contenere le informazioni del programma. Nel linguaggio C ogni variabile deve essere dichiarata prima del suo utilizzo.
+
+Il tipo di dato assolve a due compiti distinti:
+\begin{itemize}
+    \item Specifica al linker il quantitativo di memoria da riservare per la memorizzazione della variabile.
+    \item Specifica al compilatore le regole di manipolazione e le operazioni lecite sul dato memorizzato.
+\end{itemize}
+
+\newpage
+I tipi di dato fondamentali e la loro occupazione di memoria sono:
+\begin{itemize}
+    \item \textbf{\texttt{char}} $\rightarrow$ carattere singolo, dimensione pari a $8\text{ bit}$.
+    \item \textbf{\texttt{int}} $\rightarrow$ valore intero, dimensione pari a $32\text{ bit}$.
+    \item \textbf{\texttt{float}} $\rightarrow$ numero in virgola mobile a singola precisione, dimensione pari a $32\text{ bit}$.
+    \item \textbf{\texttt{double}} $\rightarrow$ numero in virgola mobile a doppia precisione, dimensione pari a $64\text{ bit}$.
+\end{itemize}
+
+I tipi fondamentali possono essere modificati tramite i prefissi \textbf{qualificatori}: \texttt{signed}, \texttt{unsigned}, \texttt{short} e \texttt{long}. Quando il tipo è modificato da un qualificatore, la specificazione del termine \texttt{int} diviene facoltativa (es. \texttt{unsigned} equivale a \texttt{unsigned int}).
+
+La classificazione dei tipi interi qualificati definisce i seguenti intervalli numerici e dimensioni:
+\begin{itemize}
+    \item \textbf{\texttt{char}}, \textbf{\texttt{signed char}} $\rightarrow$ $8\text{ bit}$, intervallo da $-128$ a $127$.
+    \item \textbf{\texttt{unsigned char}} $\rightarrow$ $8\text{ bit}$, intervallo da $0$ a $255$.
+    \item \textbf{\texttt{short int}}, \textbf{\texttt{signed short int}} $\rightarrow$ $16\text{ bit}$, intervallo da $-32768$ a $32767$.
+    \item \textbf{\texttt{unsigned short int}} $\rightarrow$ $16\text{ bit}$, intervallo da $0$ a $65535$.
+    \item \textbf{\texttt{int}}, \textbf{\texttt{signed int}} $\rightarrow$ $32\text{ bit}$, intervallo da $-2^{31}$ a $2^{31}-1$.
+    \item \textbf{\texttt{unsigned int}} $\rightarrow$ $32\text{ bit}$, intervallo da $0$ a $2^{32}-1$.
+    \item \textbf{\texttt{long int}}, \textbf{\texttt{signed long int}} $\rightarrow$ $32\text{ bit}$, intervallo da $-2^{31}$ a $2^{31}-1$.
+    \item \textbf{\texttt{unsigned long int}} $\rightarrow$ $32\text{ bit}$, intervallo da $0$ a $2^{32}-1$.
+    \item \textbf{\texttt{long long int}}, \textbf{\texttt{signed long long int}} $\rightarrow$ $64\text{ bit}$, intervallo da $-2^{63}$ a $2^{63}-1$.
+    \item \textbf{\texttt{unsigned long long int}} $\rightarrow$ $64\text{ bit}$, intervallo da $0$ a $2^{64}-1$.
+\end{itemize}
+
+Per le tipologie in virgola mobile valgono le seguenti estensioni e valori assoluti minimi e massimi:
+\begin{itemize}
+    \item \textbf{\texttt{float}} $\rightarrow$ $32\text{ bit}$, minimo assoluto $\pm\sim 10^{-44.85}$, massimo assoluto $\pm\sim 10^{38.53}$.
+    \item \textbf{\texttt{double}} $\rightarrow$ $64\text{ bit}$, minimo assoluto $\pm\sim 10^{-323.3}$, massimo assoluto $\pm\sim 10^{308.3}$.
+    \item \textbf{\texttt{long double}} $\rightarrow$ $64\text{ bit}$, minimo assoluto $\pm\sim 10^{-323.3}$, massimo assoluto $\pm\sim 10^{308.3}$.
+\end{itemize}
+
+Sotto il profilo sintattico, si distinguono due \textbf{modalità di dichiarazione}:
+\begin{itemize}
+    \item \textbf{Dichiarazione} $\rightarrow$ viene associato il tipo all'identificatore senza assegnazione contestuale di valore (es. \texttt{int x, y, z;}, \texttt{float warpFactor;}, \texttt{char text\_buffer[10];}, \texttt{unsigned index;}).
+    \item \textbf{Dichiarazione con definizione} $\rightarrow$ contestualmente alla dichiarazione viene assegnato un valore esplicito mediante l'operatore di assegnazione \texttt{=} (es. \texttt{unsigned y = 12;}, \texttt{long int myVar = 0x12345678;}, \texttt{char first = 'a', second, third = 'c';}, in cui solo \texttt{first} e \texttt{third} risultano inizializzate).
+\end{itemize}
+
+\section{Organizzazione della memoria e classi di memorizzazione}
+Lo spazio di indirizzamento della memoria è organizzato in segmenti funzionali distinti, disposti convenzionalmente dagli indirizzi bassi (\textit{low address}) verso gli indirizzi alti (\textit{high address}):
+
+\begin{itemize}
+    \item \textbf{Code Segment (Text Segment)} $\rightarrow$ contiene le istruzioni binarie del programma eseguite dal processore. È un'area ad accesso esclusivo di sola lettura (\textit{read-only}); nei microcontrollori risiede permanentemente nella memoria non volatile (Flash).
+    \item \textbf{Data Segment} $\rightarrow$ accoglie le variabili globali e le variabili statiche, suddiviso internamente in due sezioni:
+    \begin{itemize}
+        \item \textbf{Initialized Data} $\rightarrow$ ospita variabili globali e statiche inizializzate esplicitamente a un valore diverso da zero. Si ripartisce a sua volta in una \textit{read-only area} (costanti e string literal) e una \textit{read-write area}. Nei microcontrollori i valori iniziali risiedono fisicamente in memoria Flash e vengono trasferiti in RAM dallo startup code durante la sequenza di reset, consentendone la modifica a run-time.
+        \item \textbf{Uninitialized Data (BSS, Block Started by Symbol)} $\rightarrow$ ospita le variabili globali e statiche non inizializzate o inizializzate esplicitamente a zero; viene azzerato in memoria RAM dal codice di avvio (\texttt{csstartup}) prima dell'avvio dell'applicazione.
+    \end{itemize}
+    \item \textbf{Heap} $\rightarrow$ destinato all'allocazione dinamica della memoria a run-time mediante le funzioni \texttt{malloc()} e \texttt{free()}; è allocato in RAM e presenta una direzione di crescita verso gli indirizzi alti.
+    \item \textbf{Stack} $\rightarrow$ operante in RAM secondo logica LIFO, alloca le variabili locali, le variabili allocate nei registri e l'intero contesto di esecuzione delle funzioni (parametri e indirizzi di ritorno); presenta una direzione di crescita verso il basso (indirizzi decrescenti). Un dimensionamento non idoneo o un eccessivo riempimento dello stack può generare uno sfondamento delle aree contigue fino a raggiungere il Code Segment, costituendo una nota vulnerabilità software.
+    \item \textbf{Argomenti da riga di comando e variabili d'ambiente} $\rightarrow$ risiedono al vertice superiore della mappa di memoria, in corrispondenza degli indirizzi più elevati.
+\end{itemize}
+
+La dimensione complessiva del programma binario da memorizzare fisicamente è definita dall'espressione:
+\[
+\text{Codice Binario} = \text{Code Segment} + \text{Initialized Data}
+\]
+
+Nei microcontrollori il vettore delle eccezioni è rilocabile; ciò rende possibile rimappare lo spazio di indirizzamento scambiando o modificando le posizioni relative di memoria Flash e RAM.
+
+Le classi di memorizzazione (\textit{storage classes}) determinano il segmento di allocazione, il valore di inizializzazione predefinito, la visibilità (\textit{scope}) e la persistenza temporale (\textit{life}) delle variabili:
+
+\begin{itemize}
+    \item \textbf{\texttt{auto}} $\rightarrow$ allocata nello Stack; assume valore iniziale indefinito (\textit{garbage}); visibilità limitata all'interno del blocco di definizione (\textit{within block}); tempo di vita limitato alla terminazione del blocco (\textit{end of block}).
+    \item \textbf{\texttt{extern}} $\rightarrow$ allocata nel Data Segment; valore iniziale predefinito pari a zero; visibilità globale estesa su molteplici file di progetto; tempo di vita esteso all'intera durata dell'esecuzione del programma.
+    \item \textbf{\texttt{static}} $\rightarrow$ allocata nel Data Segment; valore iniziale predefinito pari a zero; visibilità confinata al blocco locale in cui è dichiarata (\textit{within block}); tempo di vita permanente per l'intera durata del programma.
+    \item \textbf{\texttt{register}} $\rightarrow$ allocata direttamente nei registri interni della CPU; assume valore iniziale indefinito (\textit{garbage}); visibilità limitata al blocco (\textit{within block}); tempo di vita limitato alla fine del blocco.
+\end{itemize}
+
+Le modalità di dichiarazione determinano l'effettivo posizionamento nei segmenti:
+\begin{itemize}
+    \item Una variabile globale definita con inizializzazione diversa da zero (es. \texttt{int i = 10;}) viene allocata nell'Initialized Data Segment.
+    \item Una variabile globale priva di valore iniziale (es. \texttt{int j;}) o qualificata \texttt{static} senza assegnazione (es. \texttt{static int i;}) viene posizionata nel segmento BSS.
+    \item L'impiego del modificatore \texttt{static} all'interno di una funzione per una variabile inizializzata (es. \texttt{static int i = 10;}) ne assegna l'allocazione all'Initialized Data Segment, consentendo al dato di preservare il valore tra chiamate successive.
+    \item Nella definizione vettoriale \texttt{char s[] = "hello world";}, il dato risiede in Flash e viene interamente copiato in RAM durante il run-time; al contrario, nella dichiarazione puntatore \texttt{const char* string = "hello world";}, la stringa costante letterale è confinata nell'area \textit{read-only} dell'Initialized Data, mentre la variabile puntatore \texttt{string} è allocata nell'area \textit{read-write}.
+\end{itemize}
+
+% [INSERIRE FIGURA: Mappa di layout della memoria nei microcontrollori da low ad high address: Code Segment in Flash, Initialized Data in Flash/RAM, BSS in RAM, crescita dello Heap verso l'alto e dello Stack verso il basso, con indicazione dell'intervallo libero]
