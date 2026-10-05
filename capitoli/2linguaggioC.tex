@@ -9,14 +9,18 @@ I linguaggi di programmazione si distinguono in base alla modalità di traduzion
 Un caso peculiare tra i linguaggi interpretati è rappresentato dall'ambiente LabVIEW, il quale presenta una doppia interpretazione: il suo interprete è sviluppato in C\# (a sua volta linguaggio interpretato con runtime engine) e fa uso di DLL (\textit{Dynamic Link Library}, note come \textit{shared objects} in altri sistemi operativi), ovvero moduli di codice nativo precompilato collegati dinamicamente all'applicazione in fase di esecuzione, in contrasto con il linking statico eseguito al momento della compilazione.
 
 \section{Architettura della Toolchain}
-La toolchain rappresenta la suite integrata di strumenti software deputata alla trasformazione del codice sorgente in firmware eseguibile. La configurazione della toolchain è strettamente hardware-specific: ogni variazione del processore di destinazione richiede un compilatore, un assembler e un linker dedicati per la specifica architettura. L'intero flusso è tipicamente coordinato da un programma supervisore (\textit{make} o compiler driver).
+La toolchain rappresenta la suite integrata di strumenti software deputata alla trasformazione del codice sorgente in firmware eseguibile. La configurazione della toolchain è strettamente \textit{hardware-specific}: ogni variazione del processore di destinazione richiede un compilatore, un assembler e un linker dedicati per la specifica architettura. L'intero flusso è tipicamente coordinato da un programma supervisore (\textit{make} o compiler driver).
 
 Il processo si articola in fasi sequenziali ben definite:
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\linewidth]{immagini/programmazione1}
+\end{figure}
 \begin{enumerate}
-    \item \textbf{Preprocessing e Compilazione C} $\rightarrow$ il preprocessore espande le macro definite tramite la direttiva \texttt{\#define} e include il contenuto dei file di intestazione specificati con \texttt{\#include}. Il compilatore esegue l'analisi lessicale e sintattica del codice sorgente (\texttt{.c}) e genera i corrispondenti file sorgente in linguaggio assembly (\texttt{.asm}).
-    \item \textbf{Assemblaggio} $\rightarrow$ l'assembler elabora i file assembly (\texttt{.asm}, \texttt{.s}) e gli eventuali file ausiliari di inclusione (\texttt{.inc}), traducendoli in file oggetto (\texttt{.o}). I file oggetto contengono codice macchina non ancora consolidato, caratterizzato da riferimenti simbolici non risolti. Per ogni file sorgente C corrisponde un singolo file oggetto; in questa fase possono operare più compilatori e assembler in parallelo.
+    \item \textbf{Preprocessing e Compilazione C} $\rightarrow$ il \textit{preprocessore} espande le macro definite tramite la direttiva \texttt{\#define} e include il contenuto dei file di intestazione specificati con \texttt{\#include}. Il compilatore esegue l'analisi lessicale e sintattica del codice sorgente (\texttt{.c}) e genera i corrispondenti file sorgente in linguaggio assembly (\texttt{.asm}).
+    \item \textbf{Assemblaggio} $\rightarrow$ l'\textit{assembler} elabora i file assembly (\texttt{.asm}, \texttt{.s}) e gli eventuali file ausiliari di inclusione (\texttt{.inc}), traducendoli in file oggetto (\texttt{.o}). I file oggetto contengono codice macchina non ancora consolidato, caratterizzato da riferimenti simbolici non risolti. Per ogni file sorgente C corrisponde un singolo file oggetto; in questa fase possono operare più compilatori e assembler in parallelo.
     \item \textbf{Archiviazione delle librerie} $\rightarrow$ tramite il programma archiver (\textit{librarian}), i file oggetto possono essere raggruppati in librerie di archivi statici (\texttt{.a}) o dinamici (\texttt{.lib}).
-    \item \textbf{Linking} $\rightarrow$ un unico linker riceve la totalità dei file oggetto (\texttt{.o}), le librerie di sistema o utente (\texttt{.lib}, \texttt{.a}) e le direttive del Linker Script (\texttt{.lkr} o \texttt{.gld}). Il linker unifica i moduli, associa gli indirizzi fisici effettivi a tutti i simboli (funzioni e variabili globali/esterne) e colloca le sezioni di memoria secondo la mappa dell'architettura.
+    \item \textbf{Linking} $\rightarrow$ un unico \textit{linker} riceve la totalità dei file oggetto (\texttt{.o}), le librerie di sistema o utente (\texttt{.lib}, \texttt{.a}) e le direttive del Linker Script (\texttt{.lkr} o \texttt{.gld}). Il linker unifica i moduli, associa gli indirizzi fisici effettivi a tutti i simboli (funzioni e variabili globali/esterne) e colloca le sezioni di memoria secondo la mappa dell'architettura.
 \end{enumerate}
 
 I prodotti generati al termine del linking comprendono:
@@ -25,10 +29,7 @@ I prodotti generati al termine del linking comprendono:
     \item \textbf{Memory Map (\texttt{.map})} $\rightarrow$ documento descrittivo recante la ripartizione dettagliata e la collocazione degli indirizzi di memoria assegnati alle sezioni e ai simboli.
     \item \textbf{File di Debug (\texttt{.elf})} $\rightarrow$ formato che include il codice eseguibile integrato con la tabella dei simboli e le informazioni di debug, destinato agli strumenti di ispezione.
 \end{itemize}
-\begin{figure}[H]
-	\centering
-	\includegraphics[width=0.7\linewidth]{immagini/programmazione1}
-\end{figure}
+
 Il debugger (\textit{in-circuit debugging}) si avvale di una combinazione di elementi hardware e software interfacciati al microcontrollore tramite sonde dedicate (come il modulo hardware ST-Link/V2).
 
 L'analisi degli errori generati durante il flusso consente di isolare la fase di generazione responsabile:
@@ -37,13 +38,17 @@ L'analisi degli errori generati durante il flusso consente di isolare la fase di
     \item \textbf{Unresolved symbol} $\rightarrow$ errore segnalato dal linker causato dall'impossibilità di risolvere l'indirizzo di una funzione o di un identificatore (a causa di nomi errati, funzioni non implementate, moduli omessi in compilazione o librerie mancanti).
 \end{itemize}
 
-\section{Runtime Startup Code e Avvio del Sistema}
-Il software caricato all'interno della memoria di un microcontrollore non si esaurisce nel codice applicativo scritto dall'utente o generato da configuratori grafici (quali STM32CubeMX), ma include obbligatoriamente il codice di runtime C e il runtime startup code.
-
-Il C Runtime (\textit{CRT}) è un insieme di routine a basso livello e funzioni di supporto necessarie per il corretto funzionamento del linguaggio C su piattaforma embedded; viene collegato automaticamente in fase di linking e si presenta tipicamente sotto forma di sorgente assembly (\texttt{crt0.s}, oppure file nominati \texttt{startup\_....s} in ambiente ST) o codice oggetto precompilato (\texttt{crt0.o}). 
-
-Il runtime startup code viene eseguito dal processore immediatamente all'uscita dal reset, prima dell'ingresso nella funzione \texttt{main()}; esso è interamente modificabile dallo sviluppatore qualora siano richieste riconfigurazioni dell'ambiente di esecuzione.
-
+\subsection{Runtime Startup Code e Avvio del Sistema}
+Il software caricato all'interno della memoria di un microcontrollore non è formato solo dal codice scritto dall'utente o generato da configuratori grafici (quali STM32CubeMX), ma include il codice di \textbf{runtime C} e il \textbf{runtime startup code}:
+\begin{itemize}
+	\item \textbf{C Runtime (CRT)} $\rightarrow$ insieme di routine a basso livello e funzioni di supporto necessarie per il corretto funzionamento del linguaggio C su piattaforma embedded; viene collegato automaticamente in fase di linking e si presenta tipicamente sotto forma di sorgente assembly (\texttt{crt0.s}, oppure file nominati \texttt{startup\_....s} in ambiente ST) o codice oggetto precompilato (\texttt{crt0.o}). 
+	
+	\item \textbf{Runtime Startup Code} $\rightarrow$ viene eseguito dal processore immediatamente all'uscita dal reset, prima dell'ingresso nella funzione \texttt{main()}. Esso è interamente modificabile dallo sviluppatore qualora siano richieste riconfigurazioni dell'ambiente di esecuzione.
+\end{itemize}  
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.35\linewidth]{immagini/programmazione2}
+\end{figure}
 Le operazioni sequenziali eseguite dal runtime startup code sono:
 \begin{enumerate}
     \item Definizione e inizializzazione della tabella dei vettori di interruzione (Interrupt Vector Table, IVT).
@@ -54,20 +59,23 @@ Le operazioni sequenziali eseguite dal runtime startup code sono:
     \item Salto incondizionato alla prima istruzione della funzione \texttt{main()}.
 \end{enumerate}
 
-Lo Stack è una struttura dati operante secondo logica LIFO (\textit{Last In, First Out}, in cui l'ultimo elemento inserito è il primo a essere estratto) impiegata dal calcolatore per:
-\begin{itemize}
-    \item Memorizzare le sequenze di chiamate a funzione (\textit{call stack}).
-    \item Allocare temporaneamente le variabili locali.
-    \item Salvare gli indirizzi di ritorno al termine dell'esecuzione delle subroutine.
-    \item Preservare lo stato dei registri della CPU durante cambi di contesto o salti a funzione.
-\end{itemize}
-
-Il registro Stack Pointer punta permanentemente all'elemento collocato alla sommità dello stack. Tale meccanismo garantisce il riutilizzo rapido ed efficiente dello spazio occupato dalle variabili non appena queste terminano il loro ambito di visibilità; al contrario, variabili allocate esternamente allo stack risiedono in aree statiche con minore flessibilità gestionale.
-
 \newpage
-\section{Struttura del Programma e sintassi fondamentale}
+\section{Struttura del programma e sintassi fondamentale}
 Un programma in C destinato a sistemi embedded presenta una struttura modulare governata da direttive e blocchi funzionali:
+\begin{minted}[linenos]{c}
+#include <stdio.h>
 
+#define PI 3.14159
+
+int main(void)
+{
+	float radius, area;
+	//Calculate area of circle
+	radius = 12.0;
+	area = PI * radius * radius;
+	printf("Area = %f", area);
+}
+\end{minted}
 \begin{itemize}
     \item \textbf{\texttt{\#include <stdio.h>}} $\rightarrow$ direttiva per il preprocessore deputata a includere integralmente nel sorgente il contenuto del file header standard, rendendo disponibili i prototipi delle funzioni di I/O.
     \item \textbf{\texttt{\#define PI 3.14159}} $\rightarrow$ direttiva per la sostituzione testuale; ogni occorrenza dell'etichetta nel codice sottostante viene sostituita letteralmente con il valore definito prima della compilazione.
@@ -91,7 +99,40 @@ Gli \textbf{identificatori} definiscono i nomi univoci attribuiti a elementi qua
 \end{itemize}
 
 Lo standard ANSI C definisce un insieme di parole chiave riservate (\textit{keywords}) che possiedono un significato sintattico specifico per il compilatore e non possono in alcun caso essere impiegate come identificatori:
-\texttt{auto}, \texttt{break}, \texttt{case}, \texttt{char}, \texttt{const}, \texttt{continue}, \texttt{default}, \texttt{do}, \texttt{double}, \texttt{else}, \texttt{enum}, \texttt{extern}, \texttt{float}, \texttt{for}, \texttt{goto}, \texttt{if}, \texttt{int}, \texttt{long}, \texttt{register}, \texttt{return}, \texttt{short}, \texttt{signed}, \texttt{sizeof}, \texttt{static}, \texttt{struct}, \texttt{switch}, \texttt{typedef}, \texttt{union}, \texttt{unsigned}, \texttt{void}, \texttt{volatile}, \texttt{while}.
+\begin{itemize}
+	\item \texttt{auto}: dichiara una variabile locale con allocazione e durata automatica (comportamento predefinito nelle funzioni).
+	\item \texttt{break}: interrompe l'esecuzione del ciclo (\texttt{for}, \texttt{while}, \texttt{do-while}) o del blocco \texttt{switch} corrente.
+	\item \texttt{case}: definisce una specifica etichetta di valore all'interno di un'istruzione \texttt{switch}.
+	\item \texttt{char}: tipo di dato fondamentale per rappresentare singoli caratteri o interi su 1 byte.
+	\item \texttt{const}: qualifica una variabile come di sola lettura, impedendone la modifica successiva.
+	\item \texttt{continue}: salta il resto dell'iterazione corrente di un ciclo e passa alla successiva.
+	\item \texttt{default}: definisce il ramo di fallback in uno \texttt{switch} nel caso nessun \texttt{case} corrisponda.
+	\item \texttt{do}: avvia un ciclo a controllo post-condizionale in coppia con \texttt{while} (eseguito almeno una volta).
+	\item \texttt{double}: tipo di dato per numeri in virgola mobile a doppia precisione (64 bit).
+	\item \texttt{else}: definisce il blocco alternativo da eseguire quando la condizione dell'\texttt{if} risulta falsa.
+	\item \texttt{enum}: definisce un tipo di dato per enumerazione, associando identificatori a costanti intere.
+	\item \texttt{extern}: dichiara una variabile o funzione la cui definizione effettiva si trova in un'altra unità di traduzione.
+	\item \texttt{float}: tipo di dato per numeri in virgola mobile a singola precisione (32 bit).
+	\item \texttt{for}: struttura di controllo per cicli composti da inizializzazione, condizione di permanenza e passo di incremento.
+	\item \texttt{goto}: esegue un salto incondizionato verso un'etichetta (\textit{label}) definita all'interno della stessa funzione.
+	\item \texttt{if}: costrutto condizionale che esegue un blocco di istruzioni solo se l'espressione di test è vera.
+	\item \texttt{int}: tipo di dato fondamentale per la rappresentazione di numeri interi con segno.
+	\item \texttt{long}: modificatore o tipo di dato per rappresentare interi (o float) con intervallo di valori esteso.
+	\item \texttt{register}: suggerisce al compilatore di allocare la variabile direttamente in un registro CPU per minimizzare i tempi di accesso.
+	\item \texttt{return}: termina l'esecuzione della funzione corrente e restituisce un eventuale valore al chiamante.
+	\item \texttt{short}: modificatore o tipo di dato per interi di dimensione e intervallo ridotti rispetto a \texttt{int}.
+	\item \texttt{signed}: specifica esplicitamente che un tipo intero memorizza sia valori positivi che negativi.
+	\item \texttt{sizeof}: operatore valutato a tempo di compilazione che restituisce la dimensione in byte di un tipo o variabile.
+	\item \texttt{static}: mantiene persistente il valore di variabili locali tra chiamate successive, oppure limita lo \textit{scope} di variabili/funzioni globali al singolo modulo.
+	\item \texttt{struct}: definisce un tipo di dato eterogeneo composto da più membri memorizzati contiguamente.
+	\item \texttt{switch}: costrutto di selezione multipla che devia il flusso in base al valore intero di un'espressione.
+	\item \texttt{typedef}: definisce un alias o sinonimo per un tipo di dato preesistente.
+	\item \texttt{union}: definisce una struttura dati in cui tutti i membri condividono la medesima area di memoria sovrapposta.
+	\item \texttt{unsigned}: specifica che un tipo intero gestisce unicamente valori non negativi ($\ge 0$).
+	\item \texttt{void}: indica un tipo nullo o vuoto, usato per funzioni senza valore di ritorno o puntatori generici privi di tipo tipizzato.
+	\item \texttt{volatile}: segnala al compilatore che il valore può variare in modo asincrono (es. registri mappati su hardware o routine ISR), inibendo l'ottimizzazione sui registri.
+	\item \texttt{while}: costrutto iterativo a controllo pre-condizionale che reitera finché l'espressione si mantiene vera.
+\end{itemize}
 
 \subsection{Tipizzazione dei dati e dichiarazione delle variabili}
 Una \textbf{variabile} costituisce l'associazione tra un tipo di dato e un identificatore, atta a rappresentare una o più locazioni di memoria destinate a contenere le informazioni del programma. Nel linguaggio C ogni variabile deve essere dichiarata prima del suo utilizzo.
@@ -102,7 +143,6 @@ Il tipo di dato assolve a due compiti distinti:
     \item Specifica al compilatore le regole di manipolazione e le operazioni lecite sul dato memorizzato.
 \end{itemize}
 
-\newpage
 I tipi di dato fondamentali e la loro occupazione di memoria sono:
 \begin{itemize}
     \item \textbf{\texttt{char}} $\rightarrow$ carattere singolo, dimensione pari a $8\text{ bit}$.
@@ -142,7 +182,10 @@ Sotto il profilo sintattico, si distinguono due \textbf{modalità di dichiarazio
 
 \section{Organizzazione della memoria e classi di memorizzazione}
 Lo spazio di indirizzamento della memoria è organizzato in segmenti funzionali distinti, disposti convenzionalmente dagli indirizzi bassi (\textit{low address}) verso gli indirizzi alti (\textit{high address}):
-
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.5\linewidth]{immagini/programmazione3}
+\end{figure}
 \begin{itemize}
     \item \textbf{Code Segment (Text Segment)} $\rightarrow$ contiene le istruzioni binarie del programma eseguite dal processore. È un'area ad accesso esclusivo di sola lettura (\textit{read-only}); nei microcontrollori risiede permanentemente nella memoria non volatile (Flash).
     \item \textbf{Data Segment} $\rightarrow$ accoglie le variabili globali e le variabili statiche, suddiviso internamente in due sezioni:
@@ -162,7 +205,7 @@ La dimensione complessiva del programma binario da memorizzare fisicamente è de
 
 Nei microcontrollori il vettore delle eccezioni è rilocabile; ciò rende possibile rimappare lo spazio di indirizzamento scambiando o modificando le posizioni relative di memoria Flash e RAM.
 
-Le classi di memorizzazione (\textit{storage classes}) determinano il segmento di allocazione, il valore di inizializzazione predefinito, la visibilità (\textit{scope}) e la persistenza temporale (\textit{life}) delle variabili:
+Le classi di memorizzazione (\textbf{storage classes}) determinano il segmento di allocazione, il valore di inizializzazione predefinito, la visibilità (\textit{scope}) e la persistenza temporale (\textit{life}) delle variabili:
 
 \begin{itemize}
     \item \textbf{\texttt{auto}} $\rightarrow$ allocata nello Stack; assume valore iniziale indefinito (\textit{garbage}); visibilità limitata all'interno del blocco di definizione (\textit{within block}); tempo di vita limitato alla terminazione del blocco (\textit{end of block}).
@@ -170,6 +213,10 @@ Le classi di memorizzazione (\textit{storage classes}) determinano il segmento d
     \item \textbf{\texttt{static}} $\rightarrow$ allocata nel Data Segment; valore iniziale predefinito pari a zero; visibilità confinata al blocco locale in cui è dichiarata (\textit{within block}); tempo di vita permanente per l'intera durata del programma.
     \item \textbf{\texttt{register}} $\rightarrow$ allocata direttamente nei registri interni della CPU; assume valore iniziale indefinito (\textit{garbage}); visibilità limitata al blocco (\textit{within block}); tempo di vita limitato alla fine del blocco.
 \end{itemize}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.7\linewidth]{immagini/programmazione4}
+\end{figure}
 
 Le modalità di dichiarazione determinano l'effettivo posizionamento nei segmenti:
 \begin{itemize}
@@ -178,5 +225,3 @@ Le modalità di dichiarazione determinano l'effettivo posizionamento nei segment
     \item L'impiego del modificatore \texttt{static} all'interno di una funzione per una variabile inizializzata (es. \texttt{static int i = 10;}) ne assegna l'allocazione all'Initialized Data Segment, consentendo al dato di preservare il valore tra chiamate successive.
     \item Nella definizione vettoriale \texttt{char s[] = "hello world";}, il dato risiede in Flash e viene interamente copiato in RAM durante il run-time; al contrario, nella dichiarazione puntatore \texttt{const char* string = "hello world";}, la stringa costante letterale è confinata nell'area \textit{read-only} dell'Initialized Data, mentre la variabile puntatore \texttt{string} è allocata nell'area \textit{read-write}.
 \end{itemize}
-
-% [INSERIRE FIGURA: Mappa di layout della memoria nei microcontrollori da low ad high address: Code Segment in Flash, Initialized Data in Flash/RAM, BSS in RAM, crescita dello Heap verso l'alto e dello Stack verso il basso, con indicazione dell'intervallo libero]

@@ -1,0 +1,14 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{c+cp}{\PYGZsh{}include}\PYG{+w}{ }\PYG{c+cpf}{\PYGZlt{}stdio.h\PYGZgt{}}
+
+\PYG{c+cp}{\PYGZsh{}define PI 3.14159}
+
+\PYG{k+kt}{int}\PYG{+w}{ }\PYG{n+nf}{main}\PYG{p}{(}\PYG{k+kt}{void}\PYG{p}{)}
+\PYG{p}{\PYGZob{}}
+\PYG{+w}{	}\PYG{k+kt}{float}\PYG{+w}{ }\PYG{n}{radius}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{area}\PYG{p}{;}
+\PYG{+w}{	}\PYG{c+c1}{//Calculate area of circle}
+\PYG{+w}{	}\PYG{n}{radius}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{l+m+mf}{12.0}\PYG{p}{;}
+\PYG{+w}{	}\PYG{n}{area}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{n}{PI}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{radius}\PYG{+w}{ }\PYG{o}{*}\PYG{+w}{ }\PYG{n}{radius}\PYG{p}{;}
+\PYG{+w}{	}\PYG{n}{printf}\PYG{p}{(}\PYG{l+s}{\PYGZdq{}Area = \PYGZpc{}f\PYGZdq{}}\PYG{p}{,}\PYG{+w}{ }\PYG{n}{area}\PYG{p}{);}
+\PYG{p}{\PYGZcb{}}
+\end{Verbatim}
