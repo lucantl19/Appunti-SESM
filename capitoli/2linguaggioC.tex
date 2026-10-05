@@ -41,7 +41,7 @@ L'analisi degli errori generati durante il flusso consente di isolare la fase di
 \subsection{Runtime Startup Code e Avvio del Sistema}
 Il software caricato all'interno della memoria di un microcontrollore non è formato solo dal codice scritto dall'utente o generato da configuratori grafici (quali STM32CubeMX), ma include il codice di \textbf{runtime C} e il \textbf{runtime startup code}:
 \begin{itemize}
-	\item \textbf{C Runtime (CRT)} $\rightarrow$ insieme di routine a basso livello e funzioni di supporto necessarie per il corretto funzionamento del linguaggio C su piattaforma embedded; viene collegato automaticamente in fase di linking e si presenta tipicamente sotto forma di sorgente assembly (\texttt{crt0.s}, oppure file nominati \texttt{startup\_....s} in ambiente ST) o codice oggetto precompilato (\texttt{crt0.o}). 
+	\item \textbf{C Runtime (CRT)} $\rightarrow$ insieme di routine a basso livello e funzioni di supporto necessarie per il corretto funzionamento del linguaggio C su piattaforma embedded; viene collegato automaticamente in fase di linking e si presenta tipicamente sotto forma di sorgente assembly (\texttt{crt0.s}) o codice oggetto (\texttt{crt0.o}). 
 	
 	\item \textbf{Runtime Startup Code} $\rightarrow$ viene eseguito dal processore immediatamente all'uscita dal reset, prima dell'ingresso nella funzione \texttt{main()}. Esso è interamente modificabile dallo sviluppatore qualora siano richieste riconfigurazioni dell'ambiente di esecuzione.
 \end{itemize}  
@@ -49,9 +49,9 @@ Il software caricato all'interno della memoria di un microcontrollore non è for
 	\centering
 	\includegraphics[width=0.35\linewidth]{immagini/programmazione2}
 \end{figure}
-Le operazioni sequenziali eseguite dal runtime startup code sono:
+Le operazioni eseguite dal runtime startup code sono:
 \begin{enumerate}
-    \item Definizione e inizializzazione della tabella dei vettori di interruzione (Interrupt Vector Table, IVT).
+    \item Definizione e inizializzazione della tabella dei vettori di interruzione.
     \item Configurazione degli handler per la gestione delle eccezioni hardware e software (condizioni anomale quali divisioni per zero o tentativi di accesso non valido in memoria).
     \item Gestione del vettore di reset: all'indirizzo fisico $0$ della memoria risiede il puntatore all'istruzione di reset, la quale provvede ad azzerare il registro Program Counter (PC), indirizzandolo alla prima istruzione eseguibile.
     \item Inizializzazione fisica di tutte le sezioni di memoria dati (copia dei valori iniziali delle variabili dalla memoria non volatile alla RAM e azzeramento dell'area BSS).
@@ -64,11 +64,9 @@ Le operazioni sequenziali eseguite dal runtime startup code sono:
 Un programma in C destinato a sistemi embedded presenta una struttura modulare governata da direttive e blocchi funzionali:
 \begin{minted}[linenos]{c}
 #include <stdio.h>
-
 #define PI 3.14159
 
-int main(void)
-{
+int main(void){
 	float radius, area;
 	//Calculate area of circle
 	radius = 12.0;
@@ -194,16 +192,9 @@ Lo spazio di indirizzamento della memoria è organizzato in segmenti funzionali 
         \item \textbf{Uninitialized Data (BSS, Block Started by Symbol)} $\rightarrow$ ospita le variabili globali e statiche non inizializzate o inizializzate esplicitamente a zero; viene azzerato in memoria RAM dal codice di avvio (\texttt{csstartup}) prima dell'avvio dell'applicazione.
     \end{itemize}
     \item \textbf{Heap} $\rightarrow$ destinato all'allocazione dinamica della memoria a run-time mediante le funzioni \texttt{malloc()} e \texttt{free()}; è allocato in RAM e presenta una direzione di crescita verso gli indirizzi alti.
-    \item \textbf{Stack} $\rightarrow$ operante in RAM secondo logica LIFO, alloca le variabili locali, le variabili allocate nei registri e l'intero contesto di esecuzione delle funzioni (parametri e indirizzi di ritorno); presenta una direzione di crescita verso il basso (indirizzi decrescenti). Un dimensionamento non idoneo o un eccessivo riempimento dello stack può generare uno sfondamento delle aree contigue fino a raggiungere il Code Segment, costituendo una nota vulnerabilità software.
+    \item \textbf{Stack} $\rightarrow$ operante in RAM secondo logica LIFO (\textit{Last In - First Out}), alloca le variabili locali, le variabili allocate nei registri e l'intero contesto di esecuzione delle funzioni (parametri e indirizzi di ritorno); presenta una direzione di crescita verso il basso (indirizzi decrescenti). Un dimensionamento non idoneo o un eccessivo riempimento dello stack può generare uno sfondamento delle aree contigue fino a raggiungere il Code Segment, costituendo una nota vulnerabilità software.
     \item \textbf{Argomenti da riga di comando e variabili d'ambiente} $\rightarrow$ risiedono al vertice superiore della mappa di memoria, in corrispondenza degli indirizzi più elevati.
 \end{itemize}
-
-La dimensione complessiva del programma binario da memorizzare fisicamente è definita dall'espressione:
-\[
-\text{Codice Binario} = \text{Code Segment} + \text{Initialized Data}
-\]
-
-Nei microcontrollori il vettore delle eccezioni è rilocabile; ciò rende possibile rimappare lo spazio di indirizzamento scambiando o modificando le posizioni relative di memoria Flash e RAM.
 
 Le classi di memorizzazione (\textbf{storage classes}) determinano il segmento di allocazione, il valore di inizializzazione predefinito, la visibilità (\textit{scope}) e la persistenza temporale (\textit{life}) delle variabili:
 
@@ -218,10 +209,103 @@ Le classi di memorizzazione (\textbf{storage classes}) determinano il segmento d
 	\includegraphics[width=0.7\linewidth]{immagini/programmazione4}
 \end{figure}
 
-Le modalità di dichiarazione determinano l'effettivo posizionamento nei segmenti:
+\section{Puntatori}
+All'interno di un'applicazione in linguaggio C per sistemi embedded, l'accesso alle variabili può avvenire sia mediante identificatore diretto, leggendone e modificandone il valore memorizzato, sia operando direttamente sull'indirizzo fisico occupato dalla variabile nello spazio di memoria.
+
+Un \textbf{puntatore} è una variabile destinata a memorizzare l'indirizzo di memoria di un'altra variabile o di una funzione. Tale meccanismo realizza una modalità di \textbf{indirizzamento indiretto}: tramite il puntatore è possibile accedere e manipolare il valore della cella di memoria puntata e, al contempo, modificare dinamicamente l'indirizzo memorizzato nel puntatore stesso per indirizzare locazioni differenti.
+
+\subsubsection{Dichiarazione, Inizializzazione e Dereferenziazione}
+La sintassi fondamentale per la \textbf{definizione} di un puntatore impone l'esplicitazione del tipo di dato a cui il puntatore fa riferimento:
+\[
+\text{type } *\text{p};
+\]
+Nell'istruzione di dichiarazione, l'operatore \texttt{*} qualifica la variabile \texttt{p} come puntatore, mentre \texttt{type} identifica il tipo di dato allocato nella locazione bersaglio (\texttt{int}, \texttt{float}, ecc...).
+
+L'inizializzazione di un puntatore richiede l'\textbf{assegnazione dell'indirizzo} di memoria di una variabile esistente dello stesso tipo base. Tale indirizzo viene ottenuto anteponendo al nome della variabile l'operatore unario di indirizzo \texttt{\&} (\textit{address of}). Poiché l'assegnamento imposta l'indirizzo contenuto nel puntatore e non il valore nella locazione puntata, l'operatore \texttt{*} non deve essere adoperato:
+\begin{minted}[linenos]{c}
+p = &x; // Assegna al puntatore p l'indirizzo della variabile x
+\end{minted}
+
+Una volta inizializzato il puntatore all'indirizzo di una variabile, esso consente di operare direttamente sulla variabile puntata mediante l'operatore unario di \textbf{dereferenziazione} \texttt{*}. A differenza del suo utilizzo in fase di dichiarazione, all'interno di un'espressione il simbolo \texttt{*} assume il significato di ``accedi al valore della variabile puntata da \texttt{p}'' invece che all'indirizzo contenuto in \texttt{p} stesso. Qualora \texttt{p} punti a \texttt{x}, l'istruzione \texttt{y = *p;} produce un effetto equivalente all'assegnamento diretto \texttt{y = x;}.
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.6\linewidth]{immagini/programmazione5}
+\end{figure}
+
+\subsubsection{Puntatori costanti e puntatori variabili}
+Nel linguaggio C i concetti di indirizzo e di puntatore sono strettamente equivalenti. L'espressione \texttt{\&x} rappresenta un puntatore alla variabile \texttt{x}. Poiché la variabile \texttt{x} mantiene una collocazione fissa nello spazio di memoria determinata dal compilatore e dal linker, l'indirizzo \texttt{\&x} non subisce traslazioni a run-time e costituisce a tutti gli effetti un \textbf{puntatore costante}.
+
+Al contrario nei \textbf{puntatori variabili} l'indirizzo di destinazione può essere riassegnato a run-time per indirizzare variabili differenti in qualsiasi punto del codice. L'accesso tramite dereferenziazione opererà sempre sulla locazione correntemente memorizzata nel puntatore.
+\begin{minted}[linenos]{c}
+int a, b;
+int *p;
+
+p = &a; //punto la variabile a
+*p = 10; //assegnazione indiretta alla variabile a
+
+p = &b //cambio varibile da puntare
+*p = 5; //assegnazione indiretta alla variabile b
+\end{minted}
+
+\subsubsection{Interfacciamento con gli array}
+Gli elementi costituenti un array vengono memorizzati dal compilatore in posizioni fisicamente contigue e sequenziali all'interno dello spazio di memoria. Tale caratteristica architetturale consente di scorrere e indicizzare gli elementi sia mediante la classica notazione con parentesi quadre sia sfruttando l'indirizzo base del primo elemento e l'aritmetica dei puntatori.
+
+Dato un array e un puntatore compatibile:
+\begin{minted}[linenos]{c}
+int x[5] = {1, 2, 3, 4, 5};
+int *p;
+\end{minted}
+
+L'indirizzamento iniziale della testa dell'array può essere espresso mediante due forme sintattiche:
 \begin{itemize}
-    \item Una variabile globale definita con inizializzazione diversa da zero (es. \texttt{int i = 10;}) viene allocata nell'Initialized Data Segment.
-    \item Una variabile globale priva di valore iniziale (es. \texttt{int j;}) o qualificata \texttt{static} senza assegnazione (es. \texttt{static int i;}) viene posizionata nel segmento BSS.
-    \item L'impiego del modificatore \texttt{static} all'interno di una funzione per una variabile inizializzata (es. \texttt{static int i = 10;}) ne assegna l'allocazione all'Initialized Data Segment, consentendo al dato di preservare il valore tra chiamate successive.
-    \item Nella definizione vettoriale \texttt{char s[] = "hello world";}, il dato risiede in Flash e viene interamente copiato in RAM durante il run-time; al contrario, nella dichiarazione puntatore \texttt{const char* string = "hello world";}, la stringa costante letterale è confinata nell'area \textit{read-only} dell'Initialized Data, mentre la variabile puntatore \texttt{string} è allocata nell'area \textit{read-write}.
+	\item \textbf{\texttt{p = x;}} $\rightarrow$ forma sintattica valida unicamente per gli array; il nome dell'array non indicizzato coincide direttamente con il puntatore al suo primo elemento.
+	\item \textbf{\texttt{p = \&x[0];}} $\rightarrow$ notazione esplicita che estrae puntualmente l'indirizzo di memoria del primo elemento (indice zero) dell'array.
 \end{itemize}
+\textbf{\texttt{p = \&x;}} $\rightarrow$ sintassi lecita solo per singole variabili scalari.
+
+\subsubsection{Aritmetica dei puntatori}
+L'aritmetica dei puntatori consente di traslare l'indirizzo contenuto in un puntatore mediante operazioni di incremento, decremento e somma/sottrazione di costanti intere. La caratteristica cardine risiede nel fatto che l'incremento di un puntatore sposta il riferimento all'elemento successivo dell'array indipendentemente dall'ampiezza fisica in byte occupata dal tipo di dato.
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.9\linewidth]{immagini/programmazione7}
+\end{figure}
+La regola fondamentale stabilisce che \textit{ogni operazione di incremento o decremento modifica l'indirizzo effettivo di un numero di byte pari a quello occupato dal tipo puntato}. Se il tipo è a 32 bit, l'incremento del puntatore aggiunge 4 byte all'indirizzo in esso contenuto.
+
+L'associazione dell'operatore di dereferenziazione \texttt{*} con l'operatore di post-incremento \texttt{++} è fonte di ambiguità sintattiche. Nel linguaggio C entrambi gli operatori possiedono il medesimo livello di precedenza; tuttavia, la loro \textbf{associatività opera da destra a sinistra} (\textit{right-to-left associativity}). Tale proprietà conferisce all'operatore postfix \texttt{++} una precedenza effettiva superiore rispetto all'operatore di dereferenziazione \texttt{*}.
+
+Si distinguono due costrutti sintattici fondamentali:
+\begin{itemize}
+	\item \textbf{Post-incremento del puntatore (\texttt{p++}, \texttt{*p++}, \texttt{*(p++)})} $\rightarrow$ l'operatore di post-incremento agisce sulla variabile puntatore \texttt{p}. L'istruzione \texttt{z = *(p++);}, del tutto equivalente a \texttt{z = *p++;}, opera la sequenza:
+	\[
+	z = *p; \quad p = p + 1;
+	\]
+	Viene prima valutato il valore presente nella cella di memoria puntata da \texttt{p} (assegnato alla variabile \texttt{z}), e successivamente viene incrementato l'indirizzo contenuto nel puntatore \texttt{p}. Il contenuto della cella in memoria non subisce modifiche.
+	\item \textbf{Post-incremento del dato puntato (\texttt{(*p)++})} $\rightarrow$ la presenza delle parentesi tonde impone la priorità all'operazione di dereferenziazione prima del post-incremento. L'istruzione \texttt{z = (*p)++;} opera la sequenza:
+	\[
+	z = *p; \quad *p = *p + 1;
+	\]
+	Viene prima estratto il valore puntato da \texttt{p} per assegnarlo a \texttt{z}, dopodiché viene incrementato di un'unità il valore numerico contenuto all'interno della cella di memoria puntata da \texttt{p}. L'indirizzo memorizzato nel puntatore \texttt{p} rimane inalterato.
+\end{itemize}
+
+\subsubsection{Puntatori a funzione}
+Nel linguaggio C i puntatori possono essere impiegati per memorizzare gli indirizzi del codice eseguibile, puntando al punto di ingresso delle funzioni. Questa caratteristica consente di passare funzioni come argomenti ad altre funzioni, permettendo la realizzazione di architetture software modulari.
+
+La dichiarazione di un puntatore a funzione impone l'inclusione dell'asterisco e dell'identificatore tra parentesi tonde, associando la firma della funzione attesa:
+\begin{minted}[linenos]{c}
+int (*fp)(int x); // Dichiarazione del puntatore a funzione con nome fp
+\end{minted}
+
+I vincoli di conformità sintattica stabiliti dalla dichiarazione sono:
+\begin{itemize}
+	\item La funzione a cui il puntatore fa riferimento deve accettare come argomento esattamente un parametro di tipo \texttt{int}.
+	\item La funzione a cui il puntatore fa riferimento deve restituire un valore di tipo intero (\texttt{int}).
+\end{itemize}
+
+L'inizializzazione di un puntatore a funzione si esegue assegnando al puntatore il nome della funzione bersaglio:
+\begin{minted}[linenos]{c}
+int (*fp)(int x); // Puntatore a funzione
+int foo(int x);    // Prototipo della funzione
+
+fp = foo;          // Inizializzazione: fp punta alla funzione foo
+\end{minted}
+In seguito all'assegnamento, \texttt{fp} contiene l'indirizzo di ingresso della funzione \texttt{foo}.

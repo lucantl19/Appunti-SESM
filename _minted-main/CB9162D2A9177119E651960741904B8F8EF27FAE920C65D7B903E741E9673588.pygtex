@@ -1,0 +1,3 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{n}{p}\PYG{+w}{ }\PYG{o}{=}\PYG{+w}{ }\PYG{o}{\PYGZam{}}\PYG{n}{x}\PYG{p}{;}\PYG{+w}{ }\PYG{c+c1}{// Assegna al puntatore p l\PYGZsq{}indirizzo della variabile x}
+\end{Verbatim}
